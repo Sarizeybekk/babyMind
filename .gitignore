@@ -90,8 +90,8 @@ fastlane/test_output
 iOSInjectionProject/
 
 # Config dosyası - API key içerir, git'e eklenmemeli!
-BabyMind/Config/Config.swift
 **/Config/Config.swift
+BabyMind/Config/Config.swift
 
 # API Keys and Secrets
 *.apikey
