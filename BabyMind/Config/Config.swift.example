@@ -1,0 +1,14 @@
+//
+//  Config.swift.example
+//
+//  Bu dosyayı Config.swift olarak kopyalayın ve API key'inizi ekleyin
+//  Config.swift dosyası .gitignore'da olduğu için git'e eklenmeyecek
+//
+
+import Foundation
+
+struct Config {
+    // Gemini API Key
+    // Google AI Studio'dan API key alabilirsiniz: https://makersuite.google.com/app/apikey
+    static let geminiAPIKey = "YOUR_API_KEY_HERE"
+}
