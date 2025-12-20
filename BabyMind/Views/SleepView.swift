@@ -143,7 +143,7 @@ struct SleepView: View {
         .navigationTitle("Uyku")
         .navigationBarTitleDisplayMode(.large)
         .onAppear {
-            Task {
+            _Concurrency.Task {
                 await loadRecommendation()
             }
             withAnimation {
@@ -158,7 +158,7 @@ struct SleepView: View {
         
         do {
             let rec = try await aiService.getRecommendation(for: baby, category: .sleep)
-            try await Task.sleep(nanoseconds: 500_000_000)
+            try await _Concurrency.Task.sleep(nanoseconds: 500_000_000)
             
             await MainActor.run {
                 recommendation = rec

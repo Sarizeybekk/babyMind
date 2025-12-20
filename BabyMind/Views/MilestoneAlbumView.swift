@@ -574,7 +574,7 @@ struct AddMilestonePhotoView: View {
                         }
                     }
                     .onChange(of: photoPickerItem) { oldValue, newItem in
-                        Task {
+                        _Concurrency.Task {
                             if let data = try? await newItem?.loadTransferable(type: Data.self),
                                let image = UIImage(data: data) {
                                 selectedImage = image

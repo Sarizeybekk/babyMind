@@ -30,13 +30,6 @@ class CloudKitService: ObservableObject {
             syncError = nil
         }
         
-        defer {
-            Task { @MainActor in
-                isSyncing = false
-                lastSyncDate = Date()
-            }
-        }
-        
         // Mevcut kayıtları al
         let existingRecords = try await fetchExistingRecords(recordType: "Baby")
         
@@ -59,6 +52,11 @@ class CloudKitService: ObservableObject {
             }
             
             try await privateDatabase.save(record)
+        }
+        
+        await MainActor.run {
+            isSyncing = false
+            lastSyncDate = Date()
         }
     }
     

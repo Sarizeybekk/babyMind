@@ -119,7 +119,7 @@ struct ChatView: View {
         isLoading = true
         HapticManager.shared.impact(style: .light)
         
-        Task {
+        _Concurrency.Task {
             let response = await chatService.getResponse(for: text, baby: baby)
             
             await MainActor.run {

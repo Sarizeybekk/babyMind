@@ -175,7 +175,7 @@ struct VisionAnalysisView: View {
                 
                 // Analyze Button
                 Button(action: {
-                    Task {
+                    _Concurrency.Task {
                         await analyzeImage(image)
                     }
                 }) {
@@ -504,7 +504,7 @@ struct VisionAnalysisView: View {
                 
                 // Premium Analyze Button
                 Button(action: {
-                    Task {
+                    _Concurrency.Task {
                         await analyzeImage(image)
                     }
                 }) {

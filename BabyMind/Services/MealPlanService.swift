@@ -38,6 +38,22 @@ class MealPlanService: ObservableObject {
         return plan
     }
     
+    // AI destekli haftalık menü oluşturma
+    func generateAIWeeklyMealPlan(
+        for baby: Baby,
+        aiService: AIService,
+        recipeService: RecipeService
+    ) async throws -> MealPlan {
+        let recipes = recipeService.getRecipes(for: baby)
+        let plan = try await aiService.generateWeeklyMealPlan(
+            for: baby,
+            allergies: allergies,
+            existingRecipes: recipes
+        )
+        addMealPlan(plan)
+        return plan
+    }
+    
     private func generateDailyMeals(for date: Date, ageInMonths: Int) -> (breakfast: [MealPlan.MealItem]?, lunch: [MealPlan.MealItem]?, dinner: [MealPlan.MealItem]?, snacks: [MealPlan.MealItem]?) {
         // Geçici Baby objesi oluştur (sadece yaş için)
         let tempBaby = Baby(name: "", birthDate: Calendar.current.date(byAdding: .month, value: -ageInMonths, to: Date()) ?? Date(), gender: .male)

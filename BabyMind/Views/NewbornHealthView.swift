@@ -67,7 +67,7 @@ struct NewbornHealthView: View {
                         .padding(.horizontal, 20)
                     
                     // Günlük Takip
-                    DailyTrackingCard(healthService: healthService, theme: theme)
+                    DailyTrackingCard(healthService: healthService, baby: baby, theme: theme)
                         .padding(.horizontal, 20)
                     
                     // Son Kayıtlar
@@ -289,7 +289,7 @@ struct HealthScreeningsCard: View {
                     .padding(.top, 8)
                 
                 ForEach(upcomingScreenings.prefix(3)) { screening in
-                    ScreeningRow(screening: screening, theme: theme)
+                    ScreeningRow(screening: screening, healthService: healthService, theme: theme)
                 }
             }
             
@@ -301,7 +301,7 @@ struct HealthScreeningsCard: View {
                 .foregroundColor(.secondary)
             
             ForEach(healthService.screenings) { screening in
-                ScreeningRow(screening: screening, theme: theme)
+                ScreeningRow(screening: screening, healthService: healthService, theme: theme)
             }
         }
         .padding(20)
@@ -315,59 +315,67 @@ struct HealthScreeningsCard: View {
 
 struct ScreeningRow: View {
     let screening: HealthScreening
+    @ObservedObject var healthService: NewbornHealthService
     let theme: ColorTheme
     @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
-        HStack(spacing: 16) {
-            ZStack {
-                Circle()
-                    .fill(theme.primary.opacity(0.15))
-                    .frame(width: 50, height: 50)
+        Button(action: {
+            healthService.markScreeningCompleted(screening)
+            HapticManager.shared.selection()
+        }) {
+            HStack(spacing: 16) {
+                ZStack {
+                    Circle()
+                        .fill(theme.primary.opacity(0.15))
+                        .frame(width: 50, height: 50)
+                    
+                    Image(systemName: screening.screeningType.icon)
+                        .font(.system(size: 22))
+                        .foregroundColor(theme.primary)
+                }
                 
-                Image(systemName: screening.screeningType.icon)
-                    .font(.system(size: 22))
-                    .foregroundColor(theme.primary)
-            }
-            
-            VStack(alignment: .leading, spacing: 6) {
-                Text(screening.screeningType.rawValue)
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .foregroundColor(colorScheme == .dark ? Color.white.opacity(0.9) : Color(red: 0.2, green: 0.2, blue: 0.25))
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(screening.screeningType.rawValue)
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .foregroundColor(colorScheme == .dark ? Color.white.opacity(0.9) : Color(red: 0.2, green: 0.2, blue: 0.25))
+                    
+                    Text(screening.description)
+                        .font(.system(size: 12, design: .rounded))
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                    
+                    Text("Önerilen: \(screening.recommendedDate, style: .date)")
+                        .font(.system(size: 11, design: .rounded))
+                        .foregroundColor(.secondary)
+                }
                 
-                Text(screening.description)
-                    .font(.system(size: 12, design: .rounded))
-                    .foregroundColor(.secondary)
-                    .lineLimit(2)
+                Spacer()
                 
-                Text("Önerilen: \(screening.recommendedDate, style: .date)")
-                    .font(.system(size: 11, design: .rounded))
-                    .foregroundColor(.secondary)
+                if screening.isCompleted {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(Color(red: 0.2, green: 0.8, blue: 0.4))
+                } else {
+                    Image(systemName: "circle")
+                        .font(.system(size: 24))
+                        .foregroundColor(.secondary)
+                }
             }
-            
-            Spacer()
-            
-            if screening.isCompleted {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 24))
-                    .foregroundColor(Color(red: 0.2, green: 0.8, blue: 0.4))
-            } else {
-                Image(systemName: "circle")
-                    .font(.system(size: 24))
-                    .foregroundColor(.secondary)
-            }
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(colorScheme == .dark ? Color(red: 0.25, green: 0.25, blue: 0.3) : Color(red: 0.98, green: 0.98, blue: 0.99))
+            )
         }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(colorScheme == .dark ? Color(red: 0.25, green: 0.25, blue: 0.3) : Color(red: 0.98, green: 0.98, blue: 0.99))
-        )
+        .buttonStyle(PlainButtonStyle())
     }
 }
 
 // MARK: - Günlük Takip Kartı
 struct DailyTrackingCard: View {
     @ObservedObject var healthService: NewbornHealthService
+    let baby: Baby
     let theme: ColorTheme
     @Environment(\.colorScheme) var colorScheme
     
@@ -391,7 +399,7 @@ struct DailyTrackingCard: View {
             
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 ForEach(NewbornHealthRecord.HealthCategory.allCases.prefix(6), id: \.self) { category in
-                    TrackingCategoryCard(category: category, healthService: healthService, theme: theme)
+                    TrackingCategoryCard(category: category, healthService: healthService, baby: baby, theme: theme)
                 }
             }
         }
@@ -407,54 +415,80 @@ struct DailyTrackingCard: View {
 struct TrackingCategoryCard: View {
     let category: NewbornHealthRecord.HealthCategory
     @ObservedObject var healthService: NewbornHealthService
+    let baby: Baby
     let theme: ColorTheme
     @Environment(\.colorScheme) var colorScheme
+    @State private var showAddRecord = false
     
     var latestRecord: NewbornHealthRecord? {
         healthService.getLatestRecord(for: category)
     }
     
+    var hasTodayRecord: Bool {
+        guard let record = latestRecord else { return false }
+        let calendar = Calendar.current
+        return calendar.isDateInToday(record.date)
+    }
+    
     var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: category.icon)
-                .font(.system(size: 24))
-                .foregroundColor(theme.primary)
-            
-            Text(category.rawValue)
-                .font(.system(size: 12, design: .rounded))
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-            
-            if let record = latestRecord {
-                if let value = record.value {
-                    Text(String(format: "%.1f", value))
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
-                        .foregroundColor(Color(
+        Button(action: {
+            showAddRecord = true
+            HapticManager.shared.selection()
+        }) {
+            VStack(spacing: 8) {
+                HStack {
+                    Spacer()
+                    if hasTodayRecord {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 14))
+                            .foregroundColor(Color(red: 0.2, green: 0.8, blue: 0.4))
+                    }
+                }
+                
+                Image(systemName: category.icon)
+                    .font(.system(size: 24))
+                    .foregroundColor(theme.primary)
+                
+                Text(category.rawValue)
+                    .font(.system(size: 12, design: .rounded))
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                
+                if let record = latestRecord {
+                    if let value = record.value {
+                        Text(String(format: "%.1f", value))
+                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                            .foregroundColor(Color(
+                                red: record.status.color.red,
+                                green: record.status.color.green,
+                                blue: record.status.color.blue
+                            ))
+                    }
+                    
+                    Circle()
+                        .fill(Color(
                             red: record.status.color.red,
                             green: record.status.color.green,
                             blue: record.status.color.blue
                         ))
+                        .frame(width: 8, height: 8)
+                } else {
+                    Text("Kayıt Yok")
+                        .font(.system(size: 11, design: .rounded))
+                        .foregroundColor(.secondary)
                 }
-                
-                Circle()
-                    .fill(Color(
-                        red: record.status.color.red,
-                        green: record.status.color.green,
-                        blue: record.status.color.blue
-                    ))
-                    .frame(width: 8, height: 8)
-            } else {
-                Text("Kayıt Yok")
-                    .font(.system(size: 11, design: .rounded))
-                    .foregroundColor(.secondary)
             }
+            .frame(maxWidth: .infinity)
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(colorScheme == .dark ? Color(red: 0.25, green: 0.25, blue: 0.3) : Color(red: 0.98, green: 0.98, blue: 0.99))
+            )
         }
-        .frame(maxWidth: .infinity)
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(colorScheme == .dark ? Color(red: 0.25, green: 0.25, blue: 0.3) : Color(red: 0.98, green: 0.98, blue: 0.99))
-        )
+        .buttonStyle(PlainButtonStyle())
+        .sheet(isPresented: $showAddRecord) {
+            AddNewbornHealthRecordView(healthService: healthService, baby: baby, theme: theme, initialCategory: category)
+        }
     }
 }
 
@@ -558,12 +592,21 @@ struct AddNewbornHealthRecordView: View {
     @ObservedObject var healthService: NewbornHealthService
     let baby: Baby
     let theme: ColorTheme
+    let initialCategory: NewbornHealthRecord.HealthCategory?
     @Environment(\.dismiss) var dismiss
     @State private var category: NewbornHealthRecord.HealthCategory = .temperature
     @State private var value: String = ""
     @State private var status: NewbornHealthRecord.HealthStatus = .normal
     @State private var notes: String = ""
     @State private var date = Date()
+    
+    init(healthService: NewbornHealthService, baby: Baby, theme: ColorTheme, initialCategory: NewbornHealthRecord.HealthCategory? = nil) {
+        self.healthService = healthService
+        self.baby = baby
+        self.theme = theme
+        self.initialCategory = initialCategory
+        _category = State(initialValue: initialCategory ?? .temperature)
+    }
     
     var ageInDays: Int {
         Calendar.current.dateComponents([.day], from: baby.birthDate, to: date).day ?? 0

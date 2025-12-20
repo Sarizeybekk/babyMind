@@ -74,6 +74,10 @@ struct DashboardView: View {
                                     .padding(.horizontal, 20)
                             }
                             
+                            // Görevler Kartı
+                            TasksQuickCard(baby: baby, theme: theme)
+                                .padding(.horizontal, 20)
+                            
                             // Hızlı Aksiyonlar
                             QuickAccessSection(baby: baby, theme: theme, aiService: aiService)
                                 .padding(.horizontal, 20)
@@ -96,6 +100,15 @@ struct DashboardView: View {
                     withAnimation {
                         showContent = true
                     }
+                    // Demo verilerini yükle (sadece bir kez)
+                    if !UserDefaults.standard.bool(forKey: "demoDataLoaded_\(baby.id.uuidString)") {
+                        DemoDataService.shared.populateDemoData(
+                            for: baby.id,
+                            birthDate: baby.birthDate,
+                            gender: baby.gender
+                        )
+                        UserDefaults.standard.set(true, forKey: "demoDataLoaded_\(baby.id.uuidString)")
+                    }
                 }
             } else {
                 EmptyDashboardView()
@@ -104,7 +117,7 @@ struct DashboardView: View {
     }
     
     private func loadRecommendation(for baby: Baby) {
-        Task {
+        _Concurrency.Task {
             do {
                 let rec = try await aiService.getRecommendation(for: baby, category: .general)
                 await MainActor.run {
@@ -862,6 +875,127 @@ struct NewbornHealthQuickCard: View {
         .buttonStyle(PlainButtonStyle())
         .onAppear {
             healthService.checkEarlyWarnings()
+        }
+    }
+}
+
+// MARK: - Görevler Hızlı Kartı
+struct TasksQuickCard: View {
+    let baby: Baby
+    let theme: ColorTheme
+    @StateObject private var taskService: TaskService
+    @Environment(\.colorScheme) var colorScheme
+    
+    init(baby: Baby, theme: ColorTheme) {
+        self.baby = baby
+        self.theme = theme
+        _taskService = StateObject(wrappedValue: TaskService(babyId: baby.id))
+    }
+    
+    var pendingTasks: [Task] {
+        taskService.getPendingTasks()
+    }
+    
+    var body: some View {
+        NavigationLink(destination: TasksView(baby: baby)) {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    ZStack {
+                        Circle()
+                            .fill(Color(red: 1.0, green: 0.8, blue: 0.2).opacity(0.15))
+                            .frame(width: 50, height: 50)
+                        
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(Color(red: 1.0, green: 0.8, blue: 0.2))
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Günlük Görevler")
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .foregroundColor(colorScheme == .dark ? Color.white : Color(red: 0.2, green: 0.2, blue: 0.25))
+                        
+                        if !pendingTasks.isEmpty {
+                            Text("\(pendingTasks.count) görev bekliyor")
+                                .font(.system(size: 13, design: .rounded))
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("Tüm görevler tamamlandı! 🌟")
+                                .font(.system(size: 13, design: .rounded))
+                                .foregroundColor(Color(red: 0.2, green: 0.8, blue: 0.4))
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    if !pendingTasks.isEmpty {
+                        VStack(alignment: .trailing, spacing: 4) {
+                            Text("\(taskService.userProgress.totalPoints)")
+                                .font(.system(size: 20, weight: .bold, design: .rounded))
+                                .foregroundColor(Color(red: 1.0, green: 0.8, blue: 0.2))
+                            
+                            Text("puan")
+                                .font(.system(size: 11, design: .rounded))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+                
+                if !pendingTasks.isEmpty {
+                    // İlk 3 görevi göster
+                    VStack(spacing: 8) {
+                        ForEach(pendingTasks.prefix(3)) { task in
+                            HStack {
+                                Image(systemName: task.category.icon)
+                                    .font(.system(size: 14))
+                                    .foregroundColor(Color(
+                                        red: task.category.color.red,
+                                        green: task.category.color.green,
+                                        blue: task.category.color.blue
+                                    ))
+                                
+                                Text(task.title)
+                                    .font(.system(size: 13, design: .rounded))
+                                    .foregroundColor(colorScheme == .dark ? Color.white.opacity(0.9) : Color(red: 0.2, green: 0.2, blue: 0.25))
+                                    .lineLimit(1)
+                                
+                                Spacer()
+                                
+                                Text("+\(task.points)")
+                                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                    .foregroundColor(Color(red: 1.0, green: 0.8, blue: 0.2))
+                            }
+                            .padding(.vertical, 6)
+                            .padding(.horizontal, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(colorScheme == .dark ? Color(red: 0.25, green: 0.25, blue: 0.3) : Color(red: 0.98, green: 0.98, blue: 0.99))
+                            )
+                        }
+                    }
+                } else {
+                    HStack {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 16))
+                            .foregroundColor(Color(red: 1.0, green: 0.8, blue: 0.2))
+                        
+                        Text("Harika! Tüm görevler tamamlandı. Sen gerçekten müthiş bir annesin! 🌟")
+                            .font(.system(size: 13, design: .rounded))
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 8)
+                }
+            }
+            .padding(20)
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(colorScheme == .dark ? Color(red: 0.2, green: 0.2, blue: 0.25) : Color.white)
+                    .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 3)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .onAppear {
+            taskService.generateDailyTasks(for: baby)
         }
     }
 }

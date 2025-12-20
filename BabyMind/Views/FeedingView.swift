@@ -109,7 +109,7 @@ struct FeedingView: View {
                     .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: showContent)
                     
                     // Haftalık Menü Planlayıcı
-                    WeeklyMealPlanSection(mealPlanService: mealPlanService, baby: baby, theme: theme)
+                    WeeklyMealPlanSection(mealPlanService: mealPlanService, baby: baby, aiService: aiService, theme: theme)
                         .padding(.horizontal, 20)
                         .opacity(showContent ? 1 : 0)
                         .offset(y: showContent ? 0 : 20)
@@ -183,7 +183,7 @@ struct FeedingView: View {
             AddFoodAllergyView(mealPlanService: mealPlanService, theme: theme)
         }
             .onAppear {
-            Task {
+            _Concurrency.Task {
                 await loadRecommendation()
             }
             loadRecipes()
@@ -199,7 +199,7 @@ struct FeedingView: View {
         
             do {
                 let rec = try await aiService.getRecommendation(for: baby, category: .feeding)
-            try await Task.sleep(nanoseconds: 500_000_000)
+            try await _Concurrency.Task.sleep(nanoseconds: 500_000_000)
             
                 await MainActor.run {
                     recommendation = rec
@@ -481,9 +481,14 @@ struct RecipeCard: View {
 struct WeeklyMealPlanSection: View {
     @ObservedObject var mealPlanService: MealPlanService
     let baby: Baby
+    let aiService: AIService
     let theme: ColorTheme
     @Environment(\.colorScheme) var colorScheme
     @State private var currentPlan: MealPlan?
+    @State private var isGenerating = false
+    @State private var showError = false
+    @State private var errorMessage = ""
+    private let recipeService = RecipeService()
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -497,63 +502,189 @@ struct WeeklyMealPlanSection: View {
                     .foregroundColor(colorScheme == .dark ? Color.white : Color(red: 0.2, green: 0.2, blue: 0.25))
                 
                 Spacer()
-            }
-            
-            Button(action: {
-                HapticManager.shared.impact(style: .medium)
-                currentPlan = mealPlanService.generateWeeklyMealPlan(ageInMonths: baby.ageInMonths)
-            }) {
-                HStack {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 16))
-                    Text("Yeni Haftalık Menü Oluştur")
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
-                }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(
-                    LinearGradient(
-                        colors: [theme.primary, theme.primary.opacity(0.8)],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .cornerRadius(12)
-            }
-            
-            if let plan = currentPlan ?? mealPlanService.getCurrentWeekPlan() {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Bu Haftanın Menüsü")
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
-                        .foregroundColor(.secondary)
-                    
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 12) {
-                            ForEach(plan.meals) { meal in
-                                DailyMealCard(meal: meal, theme: theme)
-                            }
-                        }
-                        .padding(.horizontal, 4)
+                
+                if !mealPlanService.allergies.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.shield.fill")
+                            .font(.system(size: 12))
+                        Text("\(mealPlanService.allergies.count) Alerji")
+                            .font(.system(size: 11, weight: .medium, design: .rounded))
                     }
+                    .foregroundColor(Color(red: 1.0, green: 0.6, blue: 0.2))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(Color(red: 1.0, green: 0.6, blue: 0.2).opacity(0.15))
+                    )
                 }
-            } else {
-                VStack(spacing: 12) {
-                    Image(systemName: "calendar.badge.plus")
-                        .font(.system(size: 40))
-                        .foregroundColor(theme.primary.opacity(0.5))
+            }
+            
+            if baby.ageInMonths < 4 {
+                VStack(spacing: 8) {
+                    HStack {
+                        Image(systemName: "drop.fill")
+                            .font(.system(size: 16))
+                        Text("Ek Gıdaya Hazır Değil")
+                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    }
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color(red: 0.95, green: 0.95, blue: 0.97))
+                    )
                     
-                    Text("Henüz menü planı oluşturulmamış")
-                        .font(.system(size: 14, design: .rounded))
-                        .foregroundColor(.secondary)
-                    
-                    Text("Yukarıdaki butona tıklayarak haftalık menü planı oluşturabilirsiniz")
-                        .font(.system(size: 12, design: .rounded))
+                    Text("Bebeğiniz \(baby.ageInMonths) aylık. 4-6 ay arası AI ile menü oluşturabilirsiniz.")
+                        .font(.system(size: 11, design: .rounded))
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
                 }
+            } else if isGenerating {
+                HStack {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: theme.primary))
+                    Text("AI menü oluşturuyor...")
+                        .font(.system(size: 14, design: .rounded))
+                        .foregroundColor(.secondary)
+                }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 30)
+                .padding(.vertical, 14)
+            } else {
+                Button(action: {
+                    HapticManager.shared.impact(style: .medium)
+                    _Concurrency.Task {
+                        await generateAIMealPlan()
+                    }
+                }) {
+                    HStack {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 16))
+                        Text("AI ile Haftalık Menü Oluştur")
+                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(
+                        LinearGradient(
+                            colors: [theme.primary, theme.primary.opacity(0.8)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .cornerRadius(12)
+                }
+            }
+            
+            if showError {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(Color(red: 1.0, green: 0.4, blue: 0.4))
+                    Text(errorMessage)
+                        .font(.system(size: 12, design: .rounded))
+                        .foregroundColor(Color(red: 1.0, green: 0.4, blue: 0.4))
+                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(red: 1.0, green: 0.95, blue: 0.95))
+                )
+            }
+            
+            if let plan = currentPlan ?? mealPlanService.getCurrentWeekPlan() {
+                // Menü var ama içerik kontrolü
+                let hasContent = plan.meals.contains { meal in
+                    meal.breakfast != nil || meal.lunch != nil || meal.dinner != nil || meal.snacks != nil
+                }
+                
+                if hasContent {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("Bu Haftanın Menüsü")
+                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                .foregroundColor(.secondary)
+                            
+                            Spacer()
+                            
+                            if !mealPlanService.allergies.isEmpty {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "checkmark.shield.fill")
+                                        .font(.system(size: 10))
+                                    Text("Alerji Kontrolü Yapıldı")
+                                        .font(.system(size: 10, weight: .medium, design: .rounded))
+                                }
+                                .foregroundColor(Color(red: 0.2, green: 0.8, blue: 0.4))
+                            }
+                        }
+                        
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 12) {
+                                ForEach(plan.meals) { meal in
+                                    DailyMealCard(meal: meal, theme: theme)
+                                }
+                            }
+                            .padding(.horizontal, 4)
+                        }
+                    }
+                } else {
+                    // Menü var ama içerik yok (4 aydan küçük bebekler için)
+                    VStack(spacing: 12) {
+                        Image(systemName: "drop.fill")
+                            .font(.system(size: 40))
+                            .foregroundColor(theme.primary.opacity(0.6))
+                        
+                        Text("Bebeğiniz henüz ek gıdaya hazır değil")
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .foregroundColor(colorScheme == .dark ? Color.white.opacity(0.9) : Color(red: 0.2, green: 0.2, blue: 0.25))
+                        
+                        Text("Bebeğiniz \(baby.ageInMonths) aylık. Bu yaşta sadece anne sütü veya formül mama önerilir. Ek gıdaya 4-6 ay arası başlanabilir.")
+                            .font(.system(size: 12, design: .rounded))
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(30)
+                }
+            } else {
+                VStack(spacing: 12) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 40))
+                        .foregroundColor(theme.primary.opacity(0.6))
+                    
+                    Text("Henüz menü planı oluşturulmadı")
+                        .font(.system(size: 14, weight: .medium, design: .rounded))
+                        .foregroundColor(.secondary)
+                    
+                    if baby.ageInMonths < 4 {
+                        Text("Bebeğiniz henüz ek gıdaya hazır değil. 4-6 ay arası AI ile menü oluşturabilirsiniz.")
+                            .font(.system(size: 12, design: .rounded))
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                    } else {
+                        Text("Yukarıdaki butona tıklayarak AI destekli haftalık menü oluşturabilirsiniz.")
+                            .font(.system(size: 12, design: .rounded))
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                        
+                        if !mealPlanService.allergies.isEmpty {
+                            HStack(spacing: 6) {
+                                Image(systemName: "exclamationmark.shield.fill")
+                                    .font(.system(size: 12))
+                                Text("Alerji bilgileriniz otomatik olarak dikkate alınacaktır")
+                                    .font(.system(size: 11, design: .rounded))
+                            }
+                            .foregroundColor(Color(red: 1.0, green: 0.6, blue: 0.2))
+                            .padding(.top, 4)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(30)
             }
         }
         .padding(20)
@@ -564,6 +695,32 @@ struct WeeklyMealPlanSection: View {
         )
         .onAppear {
             currentPlan = mealPlanService.getCurrentWeekPlan()
+        }
+    }
+    
+    private func generateAIMealPlan() async {
+        isGenerating = true
+        showError = false
+        HapticManager.shared.impact(style: .medium)
+        
+        do {
+            let plan = try await mealPlanService.generateAIWeeklyMealPlan(
+                for: baby,
+                aiService: aiService,
+                recipeService: recipeService
+            )
+            await MainActor.run {
+                currentPlan = plan
+                isGenerating = false
+                HapticManager.shared.notification(type: .success)
+            }
+        } catch {
+            await MainActor.run {
+                isGenerating = false
+                showError = true
+                errorMessage = "Menü oluşturulurken bir hata oluştu. Lütfen tekrar deneyin."
+                HapticManager.shared.notification(type: .error)
+            }
         }
     }
 }

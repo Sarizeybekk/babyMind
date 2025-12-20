@@ -169,7 +169,8 @@ class NewbornHealthService: ObservableObject {
     
     func markScreeningCompleted(_ screening: HealthScreening) {
         if let index = screenings.firstIndex(where: { $0.id == screening.id }) {
-            screenings[index].isCompleted = true
+            screenings[index].isCompleted.toggle()
+            saveData()
         }
     }
     

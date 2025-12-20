@@ -224,6 +224,22 @@ struct MainTabView: View {
                     Label("Ruh Sağlığı", systemImage: "brain.head.profile")
                 }
                 .tag(20)
+                
+                NavigationView {
+                    HealthInstitutionsView(baby: baby)
+                }
+                .tabItem {
+                    Label("Sağlık Kurumları", systemImage: "cross.case.fill")
+                }
+                .tag(21)
+                
+                NavigationView {
+                    TasksView(baby: baby)
+                }
+                .tabItem {
+                    Label("Görevler", systemImage: "checkmark.circle.fill")
+                }
+                .tag(22)
             }
         }
         .accentColor(babyManager.selectedBaby.map { ColorTheme.theme(for: $0.gender).primary } ?? Color(red: 1.0, green: 0.5, blue: 0.7))
