@@ -9,16 +9,24 @@ import SwiftUI
 
 struct GrowthChartView: View {
     let baby: Baby
+    @StateObject private var percentileService: GrowthPercentileService
     @State private var growthData: [GrowthData] = []
     @State private var selectedMetric: GrowthMetric = .weight
     @State private var showAddData = false
+    @State private var showHeadCircumference = false
     
     enum GrowthMetric: String, CaseIterable {
         case weight = "Ağırlık"
         case height = "Boy"
+        case headCircumference = "Baş Çevresi"
     }
     
     @Environment(\.colorScheme) var colorScheme
+    
+    init(baby: Baby) {
+        self.baby = baby
+        _percentileService = StateObject(wrappedValue: GrowthPercentileService(babyId: baby.id, isMale: baby.gender == .male))
+    }
     
     var body: some View {
         let theme = ColorTheme.theme(for: baby.gender)
@@ -33,6 +41,17 @@ struct GrowthChartView: View {
             
             ScrollView {
                 VStack(spacing: 24) {
+                    // Persentil ve Trend Özeti
+                    PercentileSummaryCard(percentileService: percentileService, baby: baby, theme: theme)
+                        .padding(.horizontal, 20)
+                    
+                    // Büyüme Uyarıları
+                    let alerts = percentileService.checkAbnormalGrowth()
+                    if !alerts.isEmpty {
+                        GrowthAlertsCard(alerts: alerts, theme: theme)
+                            .padding(.horizontal, 20)
+                    }
+                    
                     // Metrik seçici
                     Picker("Metrik", selection: $selectedMetric) {
                         ForEach(GrowthMetric.allCases, id: \.self) { metric in
@@ -41,6 +60,14 @@ struct GrowthChartView: View {
                     }
                     .pickerStyle(.segmented)
                     .padding(.horizontal, 24)
+                    
+                    // Büyüme Hızı
+                    GrowthRateCard(
+                        percentileService: percentileService,
+                        metric: selectedMetric,
+                        theme: theme
+                    )
+                    .padding(.horizontal, 20)
                     
                     // Grafik kartı
                     VStack(alignment: .leading, spacing: 16) {
@@ -145,11 +172,41 @@ struct GrowthChartView: View {
             AddGrowthDataView(baby: baby, onSave: { newData in
                 growthData.insert(newData, at: 0)
                 growthData.sort { $0.date > $1.date }
+                
+                // GrowthPercentileService'e de ekle
+                let ageInMonths = Calendar.current.dateComponents([.month], from: baby.birthDate, to: newData.date).month ?? 0
+                let record = GrowthRecord(
+                    babyId: baby.id,
+                    date: newData.date,
+                    weight: newData.weight,
+                    height: newData.height,
+                    headCircumference: newData.headCircumference,
+                    ageInMonths: ageInMonths
+                )
+                percentileService.addRecord(record)
             })
         }
         .onAppear {
             loadGrowthData()
+            // GrowthPercentileService'den verileri yükle
+            syncGrowthData()
         }
+    }
+    
+    private func syncGrowthData() {
+        // GrowthPercentileService'deki verileri GrowthData'ya dönüştür
+        for record in percentileService.growthRecords {
+            let data = GrowthData(
+                date: record.date,
+                weight: record.weight,
+                height: record.height,
+                headCircumference: record.headCircumference
+            )
+            if !growthData.contains(where: { $0.id == data.id }) {
+                growthData.append(data)
+            }
+        }
+        growthData.sort { $0.date > $1.date }
     }
 }
 
@@ -430,12 +487,225 @@ struct GrowthDataRow: View {
     }
 }
 
+// MARK: - Persentil Özet Kartı
+struct PercentileSummaryCard: View {
+    @ObservedObject var percentileService: GrowthPercentileService
+    let baby: Baby
+    let theme: ColorTheme
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Image(systemName: "chart.bar.fill")
+                    .font(.system(size: 20))
+                    .foregroundColor(theme.primary)
+                
+                Text("WHO Persentil Analizi")
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .foregroundColor(colorScheme == .dark ? Color.white : Color(red: 0.2, green: 0.2, blue: 0.25))
+                
+                Spacer()
+            }
+            
+            if let latest = percentileService.growthRecords.last {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                    PercentileMiniCard(
+                        title: "Ağırlık",
+                        value: latest.weight,
+                        unit: "kg",
+                        percentile: latest.getWeightPercentile(isMale: baby.gender == .male),
+                        color: Color(red: 0.2, green: 0.7, blue: 0.9)
+                    )
+                    
+                    PercentileMiniCard(
+                        title: "Boy",
+                        value: latest.height,
+                        unit: "cm",
+                        percentile: latest.getHeightPercentile(isMale: baby.gender == .male),
+                        color: Color(red: 0.3, green: 0.8, blue: 0.5)
+                    )
+                    
+                    if let hc = latest.headCircumference, let hcPercentile = latest.getHeadCircumferencePercentile(isMale: baby.gender == .male) {
+                        PercentileMiniCard(
+                            title: "Baş Çevresi",
+                            value: hc,
+                            unit: "cm",
+                            percentile: hcPercentile,
+                            color: Color(red: 0.9, green: 0.6, blue: 0.3)
+                        )
+                    }
+                }
+            } else {
+                Text("Henüz ölçüm kaydı yok")
+                    .font(.system(size: 14, design: .rounded))
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 20)
+            }
+        }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(colorScheme == .dark ? Color(red: 0.2, green: 0.2, blue: 0.25) : Color.white)
+                .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 3)
+        )
+    }
+}
+
+struct PercentileMiniCard: View {
+    let title: String
+    let value: Double
+    let unit: String
+    let percentile: Double?
+    let color: Color
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            Text(title)
+                .font(.system(size: 12, design: .rounded))
+                .foregroundColor(.secondary)
+            
+            Text(String(format: "%.2f", value))
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .foregroundColor(colorScheme == .dark ? Color.white : Color(red: 0.2, green: 0.2, blue: 0.25))
+            
+            Text(unit)
+                .font(.system(size: 10, design: .rounded))
+                .foregroundColor(.secondary)
+            
+            if let percentile = percentile {
+                Text("%\(Int(percentile))")
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundColor(color)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(colorScheme == .dark ? Color(red: 0.25, green: 0.25, blue: 0.3) : Color(red: 0.98, green: 0.98, blue: 0.99))
+        )
+    }
+}
+
+// MARK: - Büyüme Uyarıları Kartı
+struct GrowthAlertsCard: View {
+    let alerts: [GrowthPercentileService.GrowthAlert]
+    let theme: ColorTheme
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 20))
+                    .foregroundColor(Color(red: 1.0, green: 0.4, blue: 0.4))
+                
+                Text("Büyüme Uyarıları")
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .foregroundColor(Color(red: 1.0, green: 0.4, blue: 0.4))
+                
+                Spacer()
+            }
+            
+            ForEach(Array(alerts.enumerated()), id: \.offset) { _, alert in
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(Color(red: 1.0, green: 0.4, blue: 0.4))
+                    
+                    Text(alert.message)
+                        .font(.system(size: 13, design: .rounded))
+                        .foregroundColor(colorScheme == .dark ? Color.white.opacity(0.9) : Color(red: 0.2, green: 0.2, blue: 0.25))
+                }
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(red: 1.0, green: 0.95, blue: 0.95))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color(red: 1.0, green: 0.4, blue: 0.4).opacity(0.3), lineWidth: 1)
+                )
+        )
+    }
+}
+
+// MARK: - Büyüme Hızı Kartı
+struct GrowthRateCard: View {
+    @ObservedObject var percentileService: GrowthPercentileService
+    let metric: GrowthChartView.GrowthMetric
+    let theme: ColorTheme
+    @Environment(\.colorScheme) var colorScheme
+    
+    var growthRate: Double? {
+        let growthMetric: GrowthPercentileService.GrowthMetric
+        switch metric {
+        case .weight:
+            growthMetric = .weight
+        case .height:
+            growthMetric = .height
+        case .headCircumference:
+            growthMetric = .headCircumference
+        }
+        return percentileService.getGrowthRate(metric: growthMetric)
+    }
+    
+    var body: some View {
+        if let rate = growthRate {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 18))
+                        .foregroundColor(theme.primary)
+                    
+                    Text("Büyüme Hızı (Son 30 Gün)")
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundColor(colorScheme == .dark ? Color.white : Color(red: 0.2, green: 0.2, blue: 0.25))
+                    
+                    Spacer()
+                }
+                
+                HStack {
+                    Text(metric == .weight ? String(format: "+%.2f kg/ay", rate) : 
+                         metric == .height ? String(format: "+%.1f cm/ay", rate) :
+                         String(format: "+%.1f cm/ay", rate))
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundColor(theme.primary)
+                    
+                    Spacer()
+                    
+                    if rate > 0 {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(Color(red: 0.2, green: 0.8, blue: 0.4))
+                    } else {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(Color(red: 1.0, green: 0.4, blue: 0.4))
+                    }
+                }
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(colorScheme == .dark ? Color(red: 0.2, green: 0.2, blue: 0.25) : Color.white)
+                    .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
+            )
+        }
+    }
+}
+
 struct AddGrowthDataView: View {
     let baby: Baby
     let onSave: (GrowthData) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var weight: String = ""
     @State private var height: String = ""
+    @State private var headCircumference: String = ""
     @State private var date = Date()
     
     var body: some View {
@@ -461,6 +731,15 @@ struct AddGrowthDataView: View {
                             .multilineTextAlignment(.trailing)
                             .frame(width: 100)
                     }
+                    
+                    HStack {
+                        Text("Baş Çevresi (cm)")
+                        Spacer()
+                        TextField("Opsiyonel", text: $headCircumference)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 100)
+                    }
                 }
             }
             .navigationTitle("Yeni Ölçüm")
@@ -475,10 +754,12 @@ struct AddGrowthDataView: View {
                     Button("Kaydet") {
                         if let weightValue = Double(weight),
                            let heightValue = Double(height) {
+                            let hc = headCircumference.isEmpty ? nil : Double(headCircumference)
                             let newData = GrowthData(
                                 date: date,
                                 weight: weightValue,
-                                height: heightValue
+                                height: heightValue,
+                                headCircumference: hc
                             )
                             onSave(newData)
                             dismiss()

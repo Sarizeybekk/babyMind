@@ -168,6 +168,54 @@ struct MainTabView: View {
                     Label("Ağlama Analizi", systemImage: "waveform")
                 }
                 .tag(12)
+                
+                NavigationView {
+                    ImmunityTrackerView(baby: baby)
+                }
+                .tabItem {
+                    Label("Bağışıklık", systemImage: "cross.case.fill")
+                }
+                .tag(13)
+                
+                NavigationView {
+                    VitaminSupplementView(baby: baby)
+                }
+                .tabItem {
+                    Label("Vitamin", systemImage: "pills.fill")
+                }
+                .tag(14)
+                
+                NavigationView {
+                    BondingActivitiesView(baby: baby)
+                }
+                .tabItem {
+                    Label("Bağlanma", systemImage: "heart.circle.fill")
+                }
+                .tag(15)
+                
+                NavigationView {
+                    EmergencyGuideView(baby: baby)
+                }
+                .tabItem {
+                    Label("Acil Durum", systemImage: "cross.case.fill")
+                }
+                .tag(16)
+                
+                NavigationView {
+                    RoutinesView(baby: baby)
+                }
+                .tabItem {
+                    Label("Rutinler", systemImage: "clock.fill")
+                }
+                .tag(17)
+                
+                NavigationView {
+                    SafetyChecklistView(baby: baby)
+                }
+                .tabItem {
+                    Label("Güvenlik", systemImage: "checkmark.shield.fill")
+                }
+                .tag(18)
             }
         }
         .accentColor(babyManager.selectedBaby.map { ColorTheme.theme(for: $0.gender).primary } ?? Color(red: 1.0, green: 0.5, blue: 0.7))
