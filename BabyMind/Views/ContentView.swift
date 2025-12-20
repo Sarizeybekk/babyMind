@@ -162,14 +162,6 @@ struct MainTabView: View {
                 .tag(11)
                 
                 NavigationView {
-                    CryAnalysisView(baby: baby)
-                }
-                .tabItem {
-                    Label("Ağlama Analizi", systemImage: "waveform")
-                }
-                .tag(12)
-                
-                NavigationView {
                     ImmunityTrackerView(baby: baby)
                 }
                 .tabItem {
@@ -216,6 +208,22 @@ struct MainTabView: View {
                     Label("Güvenlik", systemImage: "checkmark.shield.fill")
                 }
                 .tag(18)
+                
+                NavigationView {
+                    NewbornHealthView(baby: baby)
+                }
+                .tabItem {
+                    Label("Yenidoğan", systemImage: "heart.text.square.fill")
+                }
+                .tag(19)
+                
+                NavigationView {
+                    PostpartumDepressionView(baby: baby)
+                }
+                .tabItem {
+                    Label("Ruh Sağlığı", systemImage: "brain.head.profile")
+                }
+                .tag(20)
             }
         }
         .accentColor(babyManager.selectedBaby.map { ColorTheme.theme(for: $0.gender).primary } ?? Color(red: 1.0, green: 0.5, blue: 0.7))

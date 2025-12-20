@@ -62,6 +62,18 @@ struct DashboardView: View {
                             TodaySummarySection(activityLogger: activityLogger)
                                 .padding(.horizontal, 20)
                             
+                            // Yenidoğan Sağlık Takibi (ilk 28 gün için)
+                            if baby.ageInDays <= 28 {
+                                NewbornHealthQuickCard(baby: baby, theme: theme)
+                                    .padding(.horizontal, 20)
+                            }
+                            
+                            // Doğum Sonrası Depresyon Risk Analizi (ilk 6 ay için)
+                            if baby.ageInMonths <= 6 {
+                                PostpartumDepressionQuickCard(baby: baby, theme: theme)
+                                    .padding(.horizontal, 20)
+                            }
+                            
                             // Hızlı Aksiyonlar
                             QuickAccessSection(baby: baby, theme: theme, aiService: aiService)
                                 .padding(.horizontal, 20)
@@ -731,6 +743,227 @@ struct DashboardSummaryCard: View {
                 .fill(Color.white)
                 .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
         )
+    }
+}
+
+// MARK: - Yenidoğan Sağlık Hızlı Kartı
+struct NewbornHealthQuickCard: View {
+    let baby: Baby
+    let theme: ColorTheme
+    @StateObject private var healthService: NewbornHealthService
+    @Environment(\.colorScheme) var colorScheme
+    
+    init(baby: Baby, theme: ColorTheme) {
+        self.baby = baby
+        self.theme = theme
+        _healthService = StateObject(wrappedValue: NewbornHealthService(babyId: baby.id, birthDate: baby.birthDate))
+    }
+    
+    var progress: SDG32Progress {
+        healthService.getSDG32Progress()
+    }
+    
+    var criticalWarnings: Int {
+        healthService.earlyWarnings.filter { $0.severity == .critical }.count
+    }
+    
+    var body: some View {
+        NavigationLink(destination: NewbornHealthView(baby: baby)) {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    ZStack {
+                        Circle()
+                            .fill(Color(red: 0.2, green: 0.8, blue: 0.4).opacity(0.15))
+                            .frame(width: 50, height: 50)
+                        
+                        Image(systemName: "heart.text.square.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(Color(red: 0.2, green: 0.8, blue: 0.4))
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Yenidoğan Sağlık Takibi")
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .foregroundColor(colorScheme == .dark ? Color.white : Color(red: 0.2, green: 0.2, blue: 0.25))
+                        
+                        Text("SDG 3.2 - İlk 28 gün kritik dönem")
+                            .font(.system(size: 12, design: .rounded))
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    if criticalWarnings > 0 {
+                        ZStack {
+                            Circle()
+                                .fill(Color(red: 1.0, green: 0.3, blue: 0.3))
+                                .frame(width: 24, height: 24)
+                            
+                            Text("\(criticalWarnings)")
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                                .foregroundColor(.white)
+                        }
+                    }
+                }
+                
+                HStack(spacing: 20) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Bebek Yaşı")
+                            .font(.system(size: 11, design: .rounded))
+                            .foregroundColor(.secondary)
+                        
+                        Text("\(progress.ageInDays) gün")
+                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                            .foregroundColor(theme.primary)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Taramalar")
+                            .font(.system(size: 11, design: .rounded))
+                            .foregroundColor(.secondary)
+                        
+                        Text("\(progress.completedScreenings)/\(progress.totalScreenings)")
+                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                            .foregroundColor(theme.primary)
+                    }
+                    
+                    Spacer()
+                    
+                    if progress.isOnTrack {
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(Color(red: 0.2, green: 0.8, blue: 0.4))
+                            
+                            Text("İyi")
+                                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                .foregroundColor(Color(red: 0.2, green: 0.8, blue: 0.4))
+                        }
+                    } else if criticalWarnings > 0 {
+                        HStack(spacing: 4) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(Color(red: 1.0, green: 0.3, blue: 0.3))
+                            
+                            Text("Dikkat")
+                                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                .foregroundColor(Color(red: 1.0, green: 0.3, blue: 0.3))
+                        }
+                    }
+                }
+            }
+            .padding(20)
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(colorScheme == .dark ? Color(red: 0.2, green: 0.2, blue: 0.25) : Color.white)
+                    .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 3)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .onAppear {
+            healthService.checkEarlyWarnings()
+        }
+    }
+}
+
+// MARK: - Doğum Sonrası Depresyon Hızlı Kartı
+struct PostpartumDepressionQuickCard: View {
+    let baby: Baby
+    let theme: ColorTheme
+    @StateObject private var ppdService: PostpartumDepressionService
+    @Environment(\.colorScheme) var colorScheme
+    
+    init(baby: Baby, theme: ColorTheme) {
+        self.baby = baby
+        self.theme = theme
+        _ppdService = StateObject(wrappedValue: PostpartumDepressionService(babyId: baby.id))
+    }
+    
+    var body: some View {
+        NavigationLink(destination: PostpartumDepressionView(baby: baby)) {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    ZStack {
+                        Circle()
+                            .fill(theme.primary.opacity(0.15))
+                            .frame(width: 50, height: 50)
+                        
+                        Image(systemName: "brain.head.profile")
+                            .font(.system(size: 24))
+                            .foregroundColor(theme.primary)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Bugün Nasılsın?")
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .foregroundColor(colorScheme == .dark ? Color.white : Color(red: 0.2, green: 0.2, blue: 0.25))
+                        
+                        Text("2 dakikalık check-in")
+                            .font(.system(size: 12, design: .rounded))
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    if !ppdService.hasRecordToday() {
+                        ZStack {
+                            Circle()
+                                .fill(Color(red: 1.0, green: 0.7, blue: 0.3))
+                                .frame(width: 24, height: 24)
+                            
+                            Image(systemName: "exclamationmark")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                    }
+                }
+                
+                if let analysis = ppdService.currentAnalysis {
+                    HStack(spacing: 16) {
+                        Text(analysis.riskLevel.emoji)
+                            .font(.system(size: 24))
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(analysis.riskLevel.rawValue)
+                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                .foregroundColor(Color(
+                                    red: analysis.riskLevel.color.red,
+                                    green: analysis.riskLevel.color.green,
+                                    blue: analysis.riskLevel.color.blue
+                                ))
+                            
+                            Text(analysis.trend.rawValue)
+                                .font(.system(size: 11, design: .rounded))
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Spacer()
+                    }
+                } else {
+                    HStack {
+                        Text("İlk check-in'i yap")
+                            .font(.system(size: 14, design: .rounded))
+                            .foregroundColor(.secondary)
+                        
+                        Spacer()
+                        
+                        Image(systemName: "arrow.right.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(theme.primary)
+                    }
+                }
+            }
+            .padding(20)
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(colorScheme == .dark ? Color(red: 0.2, green: 0.2, blue: 0.25) : Color.white)
+                    .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 3)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .onAppear {
+            ppdService.analyzeRisk()
+        }
     }
 }
 
