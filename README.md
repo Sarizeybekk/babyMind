@@ -51,3 +51,7 @@ API key almak için: [Google AI Studio](https://makersuite.google.com/app/apikey
 - UserDefaults (Yerel veri saklama)
 
 
+
+
+https://github.com/user-attachments/assets/820cc1ed-a826-44f1-9bfd-70c18ba49e3a
+
