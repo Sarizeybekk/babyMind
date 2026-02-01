@@ -428,3 +428,5 @@ struct SupplementDetailView: View {
         return formatter.string(from: date)
     }
 }
+
+

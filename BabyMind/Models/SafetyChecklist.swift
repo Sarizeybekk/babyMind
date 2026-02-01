@@ -56,3 +56,5 @@ struct SafetyChecklist: Identifiable, Codable {
         self.notes = notes
     }
 }
+
+

@@ -80,3 +80,5 @@ struct PlaySuggestion {
     let activities: [String]
     let benefits: [String]
 }
+
+

@@ -86,3 +86,5 @@ struct AllergyReaction: Identifiable, Codable {
 
 
 
+
+

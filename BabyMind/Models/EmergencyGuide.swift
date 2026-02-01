@@ -59,3 +59,5 @@ struct EmergencyGuide: Identifiable {
         self.whenToCallDoctor = whenToCallDoctor
     }
 }
+
+

@@ -312,3 +312,5 @@ struct EmergencyGuideDetailView: View {
         }
     }
 }
+
+

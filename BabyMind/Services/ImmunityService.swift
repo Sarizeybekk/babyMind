@@ -148,3 +148,5 @@ class ImmunityService: ObservableObject {
         }
     }
 }
+
+

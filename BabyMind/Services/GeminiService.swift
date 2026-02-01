@@ -9,13 +9,29 @@ import Foundation
 
 class GeminiService {
     private let apiKey = Config.geminiAPIKey
-    private let baseURL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
+    private let baseURL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+    
+    init() {
+        if apiKey.isEmpty || apiKey == "YOUR_API_KEY_HERE" {
+            print("⚠️ UYARI: Gemini API key ayarlanmamış!")
+        } else {
+            print("✅ Gemini API key yüklendi: \(apiKey.prefix(10))...")
+        }
+    }
     
     func generateResponse(prompt: String, baby: Baby) async throws -> String {
+        // API key kontrolü
+        guard !apiKey.isEmpty && apiKey != "YOUR_API_KEY_HERE" else {
+            throw NSError(domain: "GeminiService", code: -1, userInfo: [NSLocalizedDescriptionKey: "API key ayarlanmamış"])
+        }
+        
         let urlString = "\(baseURL)?key=\(apiKey)"
         guard let url = URL(string: urlString) else {
             throw NSError(domain: "GeminiService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
         }
+        
+        print("🌐 Gemini API URL: \(baseURL)")
+        print("📝 Prompt: \(prompt.prefix(100))...")
         
         // Bebeğin bilgilerini içeren context oluştur
         let context = """
@@ -58,9 +74,16 @@ class GeminiService {
         
         let (data, response) = try await URLSession.shared.data(for: request)
         
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
-            throw NSError(domain: "GeminiService", code: -2, userInfo: [NSLocalizedDescriptionKey: "API request failed"])
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NSError(domain: "GeminiService", code: -2, userInfo: [NSLocalizedDescriptionKey: "Invalid HTTP response"])
+        }
+        
+        print("📡 HTTP Status Code: \(httpResponse.statusCode)")
+        
+        guard httpResponse.statusCode == 200 else {
+            let errorData = String(data: data, encoding: .utf8) ?? "No error data"
+            print("❌ API Error Response: \(errorData)")
+            throw NSError(domain: "GeminiService", code: -2, userInfo: [NSLocalizedDescriptionKey: "API request failed with status \(httpResponse.statusCode): \(errorData)"])
         }
         
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -71,10 +94,14 @@ class GeminiService {
               let parts = content["parts"] as? [[String: Any]],
               let firstPart = parts.first,
               let text = firstPart["text"] as? String else {
+            print("❌ JSON Parse Error. Response: \(String(data: data, encoding: .utf8) ?? "No data")")
             throw NSError(domain: "GeminiService", code: -3, userInfo: [NSLocalizedDescriptionKey: "Failed to parse response"])
         }
         
+        print("✅ Gemini API yanıtı başarıyla alındı (\(text.count) karakter)")
         return text
     }
 }
+
+
 

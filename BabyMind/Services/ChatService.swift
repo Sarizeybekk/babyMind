@@ -16,15 +16,26 @@ class ChatService: ObservableObject {
         // Gemini API kullan
         if useGemini {
             do {
+                print("🤖 Gemini API çağrısı yapılıyor...")
+                print("📝 Mesaj: \(message)")
                 let response = try await geminiService.generateResponse(prompt: message, baby: baby)
+                print("✅ Gemini API yanıtı alındı: \(response.prefix(100))...")
+                print("📏 Yanıt uzunluğu: \(response.count) karakter")
                 return response
             } catch {
                 // Hata durumunda fallback yanıt
-                print("Gemini API Error: \(error.localizedDescription)")
+                print("❌ Gemini API Error: \(error.localizedDescription)")
+                if let nsError = error as NSError? {
+                    print("❌ Error Domain: \(nsError.domain)")
+                    print("❌ Error Code: \(nsError.code)")
+                    print("❌ Error Info: \(nsError.userInfo)")
+                }
+                print("⚠️ Fallback response kullanılıyor")
                 return getFallbackResponse(for: message, baby: baby)
             }
         } else {
             // Eski yöntem (fallback)
+            print("⚠️ Gemini API kapalı, fallback response kullanılıyor")
             return getFallbackResponse(for: message, baby: baby)
         }
     }
@@ -120,4 +131,6 @@ class ChatService: ObservableObject {
         ]
     }
 }
+
+
 

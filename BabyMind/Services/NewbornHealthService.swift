@@ -240,3 +240,5 @@ struct SDG32Progress {
         return !hasCriticalWarnings && screeningProgress >= 80
     }
 }
+
+

@@ -289,3 +289,5 @@ struct SafetyChecklistItemRow: View {
         .buttonStyle(PlainButtonStyle())
     }
 }
+
+

@@ -470,3 +470,5 @@ struct AddBondingActivityView: View {
         }
     }
 }
+
+

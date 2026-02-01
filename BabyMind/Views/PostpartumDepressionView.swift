@@ -580,3 +580,5 @@ struct ScoreSlider: View {
         }
     }
 }
+
+

@@ -153,3 +153,5 @@ class InstitutionAnnotation: NSObject, MKAnnotation {
         self.subtitle = institution.type.rawValue
     }
 }
+
+

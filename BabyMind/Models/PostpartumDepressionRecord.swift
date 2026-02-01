@@ -94,3 +94,5 @@ struct DepressionRiskAnalysis {
         case critical = "Kritik Düşüş"
     }
 }
+
+

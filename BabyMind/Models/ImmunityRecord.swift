@@ -78,3 +78,5 @@ struct VaccinationSchedule {
         self.completedDate = completedDate
     }
 }
+
+

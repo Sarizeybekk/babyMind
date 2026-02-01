@@ -46,6 +46,8 @@ playground.xcworkspace
 # hence it is not needed unless you have added a package configuration file to your project
 # .swiftpm
 
+.swiftpm/
+
 .build/
 
 # CocoaPods
@@ -130,3 +132,7 @@ build.log
 # Xcode user data
 *.xcuserstate
 *.xcuserdatad
+
+# Xcode workspace checks
+**/xcshareddata/IDEWorkspaceChecks.plist
+**/xcshareddata/WorkspaceSettings.xcsettings

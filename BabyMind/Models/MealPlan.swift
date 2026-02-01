@@ -99,3 +99,5 @@ struct FoodAllergy: Identifiable, Codable {
         self.notes = notes
     }
 }
+
+

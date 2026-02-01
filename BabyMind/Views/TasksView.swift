@@ -425,3 +425,5 @@ struct CompletedTaskCard: View {
         )
     }
 }
+
+

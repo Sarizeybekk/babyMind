@@ -436,3 +436,5 @@ struct AddImmunityRecordView: View {
         }
     }
 }
+
+

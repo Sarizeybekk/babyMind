@@ -45,3 +45,5 @@ struct Medication: Identifiable, Codable {
         self.isActive = isActive
     }
 }
+
+

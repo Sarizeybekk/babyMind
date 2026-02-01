@@ -416,3 +416,5 @@ struct MedicineHistoryDetailView: View {
 
 
 
+
+
